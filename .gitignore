@@ -1,0 +1,20 @@
+# Archivo: .gitignore
+# Entornos virtuales
+venv/
+env/
+
+# Archivos compilados de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Archivos de datos (para no saturar el repositorio)
+*.csv
+*.xlsx
+*.sqlite
+*.db
+*.json
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
