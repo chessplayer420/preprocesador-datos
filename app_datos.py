@@ -6,7 +6,11 @@ class DataPipelineLoader:
     def __init__(self):
         self.df = None
         self.nombre_archivo = None
-        self.preprocesado_listo = False # Para futuros pasos del pipeline
+        
+        # Nuevas variables para la historia de usuario #4
+        self.features = []
+        self.target = None
+        self.seleccion_columnas_lista = False
 
     def mostrar_menu_principal(self):
         print("\n==============================")
@@ -18,11 +22,21 @@ class DataPipelineLoader:
             print("[X] 2. Preprocesado de datos (requiere carga de datos)")
             print("[X] 3. Visualización de datos (requiere carga y preprocesado)")
             print("[X] 4. Exportar datos (requiere carga y preprocesado)")
-        else:
+        elif not self.seleccion_columnas_lista:
             print(f"[✓] 1. Cargar datos (archivo: {self.nombre_archivo})")
             print("[-] 2. Preprocesado de datos (selección de columnas requerida)")
             print("[X] 3. Visualización de datos (requiere preprocesado)")
             print("[X] 4. Exportar datos (requiere preprocesado)")
+        else:
+            print(f"[✓] 1. Cargar datos (archivo: {self.nombre_archivo})")
+            print("[-] 2. Preprocesado de datos")
+            print("    [✓] 2.1 Selección de columnas (completado)")
+            print("    [-] 2.2 Manejo de datos faltantes (pendiente)")
+            print("    [X] 2.3 Transformación de datos categóricos (pendiente)")
+            print("    [X] 2.4 Normalización y escalado (requiere transformación categórica)")
+            print("    [X] 2.5 Detección y manejo de valores atípicos (requiere normalización)")
+            print("[X] 3. Visualización de datos (requiere preprocesado completo)")
+            print("[X] 4. Exportar datos (requiere preprocesado completo)")
             
         print("[✓] 5. Salir")
         
@@ -60,6 +74,7 @@ class DataPipelineLoader:
         try:
             self.df = pd.read_csv(ruta, sep=None, engine='python')
             self.nombre_archivo = os.path.basename(ruta)
+            self.resetear_preprocesado()
             self.mostrar_info_basica()
         except Exception as e:
             print(f"Error al cargar el archivo CSV: {e}")
@@ -67,10 +82,9 @@ class DataPipelineLoader:
     def cargar_excel(self):
         ruta = input("Ingrese la ruta del archivo Excel: ")
         try:
-            # Si se necesita especificar hoja, se podría añadir lógica aquí, 
-            # por ahora carga la primera hoja por defecto para simplificar el flujo
             self.df = pd.read_excel(ruta)
             self.nombre_archivo = os.path.basename(ruta)
+            self.resetear_preprocesado()
             self.mostrar_info_basica()
         except Exception as e:
             print(f"Error al cargar el archivo Excel: {e}")
@@ -96,6 +110,7 @@ class DataPipelineLoader:
             
             self.df = pd.read_sql(f"SELECT * FROM {tabla_seleccionada}", conexion)
             self.nombre_archivo = f"{os.path.basename(ruta)} ({tabla_seleccionada})"
+            self.resetear_preprocesado()
             conexion.close()
             
             print(f'Datos de la tabla "{tabla_seleccionada}" cargados correctamente.')
@@ -104,6 +119,12 @@ class DataPipelineLoader:
         except Exception as e:
             print(f"Error al cargar la base de datos SQLite: {e}")
 
+    def resetear_preprocesado(self):
+        """Reinicia la selección si se carga un nuevo dataset."""
+        self.features = []
+        self.target = None
+        self.seleccion_columnas_lista = False
+
     def mostrar_info_basica(self, mostrar_mensaje_carga=True):
         if mostrar_mensaje_carga:
             print("Datos cargados correctamente.")
@@ -111,8 +132,48 @@ class DataPipelineLoader:
         print(f"Número de filas: {self.df.shape[0]}")
         print(f"Número de columnas: {self.df.shape[1]}")
         print("Primeras 5 filas:")
-        # Se imprime sin el índice de dataframe si es posible o limitando el output
         print(self.df.head(5).to_string())
+
+    def seleccionar_columnas(self):
+        print("\n==============================")
+        print("Selección de Columnas")
+        print("==============================")
+        print("Columnas disponibles en los datos:")
+        
+        columnas = self.df.columns.tolist()
+        for i, col in enumerate(columnas):
+            print(f"  [{i+1}] {col}")
+            
+        try:
+            print() # Salto de línea extra para coincidir con la UI solicitada
+            feat_input = input("Ingrese los números de las columnas de entrada (features), separados por comas: ")
+            print() 
+            target_input = input("Ingrese el número de la columna de salida (target): ")
+            print()
+            
+            if not feat_input.strip() or not target_input.strip():
+                raise ValueError()
+
+            # Convertir inputs a índices (restando 1 porque el menú empieza en 1)
+            feat_indices = [int(x.strip()) - 1 for x in feat_input.split(',')]
+            target_index = int(target_input.strip()) - 1
+
+            # Validar que los índices existan
+            if any(i < 0 or i >= len(columnas) for i in feat_indices) or target_index < 0 or target_index >= len(columnas):
+                raise IndexError()
+
+            # Validar que el target no esté dentro de las features
+            if target_index in feat_indices:
+                raise ValueError()
+
+            self.features = [columnas[i] for i in feat_indices]
+            self.target = columnas[target_index]
+            self.seleccion_columnas_lista = True
+
+            print(f"Selección guardada: Features = {self.features}, Target = '{self.target}'")
+
+        except (ValueError, IndexError):
+            print("⚠ Error: Debe seleccionar al menos una feature y un único target que no esté en las features.")
 
     def ejecutar(self):
         while True:
@@ -120,11 +181,13 @@ class DataPipelineLoader:
             
             if opcion == '1':
                 self.menu_carga_datos()
-            elif opcion in ['2', '3', '4']:
+            elif opcion in ['2', '2.1']:
                 if self.nombre_archivo is None:
                     print("\n[!] Debe cargar un archivo primero (Opción 1).")
                 else:
-                    print(f"\n[!] La opción {opcion} está en construcción para futuras etapas del pipeline.")
+                    self.seleccionar_columnas()
+            elif opcion in ['2.2', '2.3', '2.4', '2.5', '3', '4']:
+                print(f"\n[!] La opción {opcion} aún está pendiente de implementación o requiere pasos previos.")
             elif opcion == '5':
                 break
             else:
