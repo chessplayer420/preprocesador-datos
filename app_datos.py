@@ -12,6 +12,7 @@ class DataPipelineLoader:
         self.target = None
         self.seleccion_columnas_lista = False
         self.valores_faltantes_listos = False
+        self.transformacion_categorica_lista = False
 
     def mostrar_menu_principal(self):
         print("\n==============================")
@@ -36,11 +37,16 @@ class DataPipelineLoader:
             if not self.valores_faltantes_listos:
                 print("    [-] 2.2 Manejo de datos faltantes (pendiente)")
                 print("    [X] 2.3 Transformación de datos categóricos (requiere manejo de valores faltantes)")
-            else:
+                print("    [X] 2.4 Normalización y escalado (requiere transformación categórica)")
+            elif not self.transformacion_categorica_lista:
                 print("    [✓] 2.2 Manejo de datos faltantes (completado)")
                 print("    [-] 2.3 Transformación de datos categóricos (pendiente)")
+                print("    [X] 2.4 Normalización y escalado (requiere transformación categórica)")
+            else:
+                print("    [✓] 2.2 Manejo de datos faltantes (completado)")
+                print("    [✓] 2.3 Transformación de datos categóricos (completado)")
+                print("    [-] 2.4 Normalización y escalado (pendiente)")
                 
-            print("    [X] 2.4 Normalización y escalado (requiere transformación categórica)")
             print("    [X] 2.5 Detección y manejo de valores atípicos (requiere normalización)")
             print("[X] 3. Visualización de datos (requiere preprocesado completo)")
             print("[X] 4. Exportar datos (requiere preprocesado completo)")
@@ -132,6 +138,7 @@ class DataPipelineLoader:
         self.target = None
         self.seleccion_columnas_lista = False
         self.valores_faltantes_listos = False
+        self.transformacion_categorica_lista = False
 
     def mostrar_info_basica(self, mostrar_mensaje_carga=True):
         if mostrar_mensaje_carga:
@@ -172,8 +179,11 @@ class DataPipelineLoader:
 
             self.features = [columnas[i] for i in feat_indices]
             self.target = columnas[target_index]
+            
+            # Actualizamos estados
             self.seleccion_columnas_lista = True
-            self.valores_faltantes_listos = False # Se reinicia si se cambian las columnas
+            self.valores_faltantes_listos = False
+            self.transformacion_categorica_lista = False
 
             print(f"Selección guardada: Features = {self.features}, Target = '{self.target}'")
 
@@ -185,19 +195,16 @@ class DataPipelineLoader:
         print("Manejo de Valores Faltantes")
         print("==============================")
         
-        # Criterio: Solo analizar las columnas seleccionadas (features + target)
         columnas_seleccionadas = self.features + [self.target]
         faltantes_por_columna = self.df[columnas_seleccionadas].isnull().sum()
         columnas_con_nulos = faltantes_por_columna[faltantes_por_columna > 0]
         
-        # Caso 2: No hay valores faltantes
         if columnas_con_nulos.empty:
             print("No se han detectado valores faltantes en las columnas seleccionadas.")
             print("No es necesario aplicar ninguna estrategia.")
             self.valores_faltantes_listos = True
             return
             
-        # Caso 1 y 3: Hay valores faltantes
         print("Se han detectado valores faltantes en las siguientes columnas seleccionadas:")
         for col, count in columnas_con_nulos.items():
             print(f"  - {col}: {count} valores faltantes")
@@ -240,7 +247,6 @@ class DataPipelineLoader:
         elif opcion == '5':
             valor = input("\nSeleccione un valor numérico para reemplazar los valores faltantes: ")
             try:
-                # Intenta convertir a número si aplica
                 valor_constante = float(valor) if '.' in valor else int(valor)
             except ValueError:
                 valor_constante = valor
@@ -251,6 +257,61 @@ class DataPipelineLoader:
             self.valores_faltantes_listos = True
             
         elif opcion == '6':
+            return
+        else:
+            print("\nOpción no válida. Intente de nuevo.")
+
+    def transformar_datos_categoricos(self):
+        print("\n==============================")
+        print("Transformación de Datos Categóricos")
+        print("==============================")
+        
+        # Criterio: Solo detectar columnas categóricas dentro de las variables de entrada (features)
+        columnas_categoricas = self.df[self.features].select_dtypes(include=['object', 'category']).columns.tolist()
+        
+        # Caso 2: No hay columnas categóricas
+        if not columnas_categoricas:
+            print("No se han detectado columnas categóricas en las variables de entrada seleccionadas.")
+            print("No es necesario aplicar ninguna transformación.")
+            self.transformacion_categorica_lista = True
+            return
+            
+        # Caso 1: Hay columnas categóricas
+        print("Se han detectado columnas categóricas en las variables de entrada seleccionadas:")
+        for col in columnas_categoricas:
+            print(f"  - {col}")
+            
+        print("\nSeleccione una estrategia de transformación:")
+        print("  [1] One-Hot Encoding (genera nuevas columnas binarias)")
+        print("  [2] Label Encoding (convierte categorías a números enteros)")
+        print("  [3] Volver al menú principal")
+        
+        opcion = input("Seleccione una opción: ")
+        
+        if opcion == '1':
+            # Guardamos las columnas antes de la transformación para saber cuáles se generan nuevas
+            columnas_originales = self.df.columns.tolist()
+            
+            # Aplicamos One-Hot Encoding
+            self.df = pd.get_dummies(self.df, columns=columnas_categoricas, dtype=int)
+            
+            # Actualizamos self.features quitando las categóricas antiguas y metiendo las nuevas binarias
+            self.features = [f for f in self.features if f not in columnas_categoricas]
+            nuevas_columnas = [c for c in self.df.columns if c not in columnas_originales]
+            self.features.extend(nuevas_columnas)
+            
+            print("\nTransformación completada con One-Hot Encoding.")
+            self.transformacion_categorica_lista = True
+            
+        elif opcion == '2':
+            # Aplicamos Label Encoding utilizando pandas nativo
+            for col in columnas_categoricas:
+                self.df[col] = self.df[col].astype('category').cat.codes
+                
+            print("\nTransformación completada con Label Encoding.")
+            self.transformacion_categorica_lista = True
+            
+        elif opcion == '3':
             return
         else:
             print("\nOpción no válida. Intente de nuevo.")
@@ -271,7 +332,12 @@ class DataPipelineLoader:
                     print("\n[!] Debe realizar la selección de columnas primero (Opción 2.1).")
                 else:
                     self.manejar_valores_faltantes()
-            elif opcion in ['2.3', '2.4', '2.5', '3', '4'] or (opcion == '2' and self.valores_faltantes_listos):
+            elif opcion == '2.3' or (opcion == '2' and self.valores_faltantes_listos and not self.transformacion_categorica_lista):
+                if not self.valores_faltantes_listos:
+                    print("\n[!] Debe gestionar los valores faltantes primero (Opción 2.2).")
+                else:
+                    self.transformar_datos_categoricos()
+            elif opcion in ['2.4', '2.5', '3', '4'] or (opcion == '2' and self.transformacion_categorica_lista):
                 print(f"\n[!] Esa opción aún está pendiente de implementación o requiere pasos previos.")
             elif opcion == '5':
                 break
