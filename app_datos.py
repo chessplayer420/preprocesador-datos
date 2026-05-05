@@ -14,11 +14,18 @@ class DataPipelineLoader:
         self.valores_faltantes_listos = False
         self.transformacion_categorica_lista = False
         self.normalizacion_lista = False
+        self.atipicos_listos = False
 
     def mostrar_menu_principal(self):
         print("\n==============================")
         print("Menú Principal")
         print("==============================")
+        
+        preprocesado_completado = (self.seleccion_columnas_lista and 
+                                   self.valores_faltantes_listos and 
+                                   self.transformacion_categorica_lista and 
+                                   self.normalizacion_lista and 
+                                   self.atipicos_listos)
         
         if self.nombre_archivo is None:
             print("[-] 1. Cargar datos (ningún archivo cargado)")
@@ -32,7 +39,12 @@ class DataPipelineLoader:
             print("[X] 4. Exportar datos (requiere preprocesado)")
         else:
             print(f"[✓] 1. Cargar datos (archivo: {self.nombre_archivo})")
-            print("[-] 2. Preprocesado de datos")
+            
+            if preprocesado_completado:
+                print("[✓] 2. Preprocesado de datos")
+            else:
+                print("[-] 2. Preprocesado de datos")
+                
             print("    [✓] 2.1 Selección de columnas (completado)")
             
             if not self.valores_faltantes_listos:
@@ -50,13 +62,22 @@ class DataPipelineLoader:
                 print("    [✓] 2.3 Transformación de datos categóricos (completado)")
                 print("    [-] 2.4 Normalización y escalado (pendiente)")
                 print("    [X] 2.5 Detección y manejo de valores atípicos (requiere normalización)")
-            else:
+            elif not self.atipicos_listos:
                 print("    [✓] 2.2 Manejo de datos faltantes (completado)")
                 print("    [✓] 2.3 Transformación de datos categóricos (completado)")
                 print("    [✓] 2.4 Normalización y escalado (completado)")
                 print("    [-] 2.5 Detección y manejo de valores atípicos (pendiente)")
+            else:
+                print("    [✓] 2.2 Manejo de datos faltantes (completado)")
+                print("    [✓] 2.3 Transformación de datos categóricos (completado)")
+                print("    [✓] 2.4 Normalización y escalado (completado)")
+                print("    [✓] 2.5 Detección y manejo de valores atípicos (completado)")
                 
-            print("[X] 3. Visualización de datos (requiere preprocesado completo)")
+            if preprocesado_completado:
+                print("[-] 3. Visualización de datos (pendiente)")
+            else:
+                print("[X] 3. Visualización de datos (requiere preprocesado completo)")
+                
             print("[X] 4. Exportar datos (requiere preprocesado completo)")
             
         print("[✓] 5. Salir")
@@ -141,13 +162,14 @@ class DataPipelineLoader:
             print(f"Error al cargar la base de datos SQLite: {e}")
 
     def resetear_preprocesado(self):
-        """Reinicia todo el estado del pipeline si se carga un nuevo dataset."""
+        """Reinicia todo el estado del pipeline."""
         self.features = []
         self.target = None
         self.seleccion_columnas_lista = False
         self.valores_faltantes_listos = False
         self.transformacion_categorica_lista = False
         self.normalizacion_lista = False
+        self.atipicos_listos = False
 
     def mostrar_info_basica(self, mostrar_mensaje_carga=True):
         if mostrar_mensaje_carga:
@@ -194,6 +216,7 @@ class DataPipelineLoader:
             self.valores_faltantes_listos = False
             self.transformacion_categorica_lista = False
             self.normalizacion_lista = False
+            self.atipicos_listos = False
 
             print(f"Selección guardada: Features = {self.features}, Target = '{self.target}'")
 
@@ -233,39 +256,33 @@ class DataPipelineLoader:
             self.df.dropna(subset=columnas_con_nulos.index, inplace=True)
             print("\nFilas con valores faltantes eliminadas.")
             self.valores_faltantes_listos = True
-            
         elif opcion == '2':
             for col in columnas_con_nulos.index:
                 if pd.api.types.is_numeric_dtype(self.df[col]):
                     self.df[col] = self.df[col].fillna(self.df[col].mean())
             print("\nValores faltantes rellenados con la media de cada columna.")
             self.valores_faltantes_listos = True
-            
         elif opcion == '3':
             for col in columnas_con_nulos.index:
                 if pd.api.types.is_numeric_dtype(self.df[col]):
                     self.df[col] = self.df[col].fillna(self.df[col].median())
             print("\nValores faltantes rellenados con la mediana de cada columna.")
             self.valores_faltantes_listos = True
-            
         elif opcion == '4':
             for col in columnas_con_nulos.index:
                 self.df[col] = self.df[col].fillna(self.df[col].mode()[0])
             print("\nValores faltantes rellenados con la moda de cada columna.")
             self.valores_faltantes_listos = True
-            
         elif opcion == '5':
             valor = input("\nSeleccione un valor numérico para reemplazar los valores faltantes: ")
             try:
                 valor_constante = float(valor) if '.' in valor else int(valor)
             except ValueError:
                 valor_constante = valor
-                
             for col in columnas_con_nulos.index:
                 self.df[col] = self.df[col].fillna(valor_constante)
             print(f"Valores faltantes reemplazados con el valor {valor_constante}.")
             self.valores_faltantes_listos = True
-            
         elif opcion == '6':
             return
         else:
@@ -298,21 +315,16 @@ class DataPipelineLoader:
         if opcion == '1':
             columnas_originales = self.df.columns.tolist()
             self.df = pd.get_dummies(self.df, columns=columnas_categoricas, dtype=int)
-            
             self.features = [f for f in self.features if f not in columnas_categoricas]
             nuevas_columnas = [c for c in self.df.columns if c not in columnas_originales]
             self.features.extend(nuevas_columnas)
-            
             print("\nTransformación completada con One-Hot Encoding.")
             self.transformacion_categorica_lista = True
-            
         elif opcion == '2':
             for col in columnas_categoricas:
                 self.df[col] = self.df[col].astype('category').cat.codes
-                
             print("\nTransformación completada con Label Encoding.")
             self.transformacion_categorica_lista = True
-            
         elif opcion == '3':
             return
         else:
@@ -323,17 +335,14 @@ class DataPipelineLoader:
         print("Normalización y Escalado")
         print("==============================")
         
-        # Detectamos únicamente las numéricas dentro de las features actuales
         columnas_numericas = self.df[self.features].select_dtypes(include=['number']).columns.tolist()
         
-        # Caso 2: No hay numéricas
         if not columnas_numericas:
             print("No se han detectado columnas numéricas en las variables de entrada seleccionadas.")
             print("No es necesario aplicar ninguna normalización.")
             self.normalizacion_lista = True
             return
             
-        # Caso 1: Sí hay numéricas
         print("Se han detectado columnas numéricas en las variables de entrada seleccionadas:")
         for col in columnas_numericas:
             print(f"  - {col}")
@@ -349,29 +358,95 @@ class DataPipelineLoader:
             for col in columnas_numericas:
                 col_min = self.df[col].min()
                 col_max = self.df[col].max()
-                # Evitamos división por cero si todos los valores de la columna son iguales
                 if col_max != col_min:
                     self.df[col] = (self.df[col] - col_min) / (col_max - col_min)
                 else:
                     self.df[col] = 0.0
-                    
             print("\nNormalización completada con Min-Max Scaling.")
             self.normalizacion_lista = True
-            
         elif opcion == '2':
             for col in columnas_numericas:
                 col_mean = self.df[col].mean()
                 col_std = self.df[col].std()
-                # Evitamos división por cero si la desviación es 0
                 if col_std != 0:
                     self.df[col] = (self.df[col] - col_mean) / col_std
                 else:
                     self.df[col] = 0.0
-                    
             print("\nNormalización completada con Z-score Normalization.")
             self.normalizacion_lista = True
+        elif opcion == '3':
+            return
+        else:
+            print("\nOpción no válida. Intente de nuevo.")
+
+    def detectar_y_manejar_atipicos(self):
+        print("\n==============================")
+        print("Detección y Manejo de Valores Atípicos")
+        print("==============================")
+        
+        columnas_numericas = self.df[self.features].select_dtypes(include=['number']).columns.tolist()
+        
+        # Diccionarios para almacenar la información de los outliers encontrados
+        dict_atipicos = {}
+        mascaras_atipicos = {}
+        
+        # Algoritmo IQR
+        for col in columnas_numericas:
+            Q1 = self.df[col].quantile(0.25)
+            Q3 = self.df[col].quantile(0.75)
+            IQR = Q3 - Q1
+            limite_inferior = Q1 - 1.5 * IQR
+            limite_superior = Q3 + 1.5 * IQR
+            
+            mascara = (self.df[col] < limite_inferior) | (self.df[col] > limite_superior)
+            cantidad = mascara.sum()
+            
+            if cantidad > 0:
+                dict_atipicos[col] = cantidad
+                mascaras_atipicos[col] = mascara
+                
+        # Caso 2: No se detectan valores atípicos
+        if not dict_atipicos:
+            print("No se han detectado valores atípicos en las columnas seleccionadas.")
+            print("No es necesario aplicar ninguna estrategia.")
+            self.atipicos_listos = True
+            return
+            
+        # Caso 1: Sí se detectan
+        print("Se han detectado valores atípicos en las siguientes columnas numéricas seleccionadas:")
+        for col, cantidad in dict_atipicos.items():
+            print(f"  - {col}: {cantidad} valores atípicos detectados")
+            
+        print("\nSeleccione una estrategia para manejar los valores atípicos:")
+        print("  [1] Eliminar filas con valores atípicos")
+        print("  [2] Reemplazar valores atípicos con la mediana de la columna")
+        print("  [3] Mantener valores atípicos sin cambios")
+        print("  [4] Volver al menú principal")
+        
+        opcion = input("Seleccione una opción: ")
+        
+        if opcion == '1':
+            # Creamos una máscara global combinando todas las máscaras individuales
+            mascara_total = pd.Series(False, index=self.df.index)
+            for mascara in mascaras_atipicos.values():
+                mascara_total = mascara_total | mascara
+                
+            self.df = self.df[~mascara_total]
+            print("\nFilas con valores atípicos eliminadas.")
+            self.atipicos_listos = True
+            
+        elif opcion == '2':
+            for col, mascara in mascaras_atipicos.items():
+                mediana = self.df[col].median()
+                self.df.loc[mascara, col] = mediana
+            print("\nValores atípicos reemplazados con la mediana de cada columna.")
+            self.atipicos_listos = True
             
         elif opcion == '3':
+            print("\nSe han mantenido los valores atípicos sin cambios.")
+            self.atipicos_listos = True
+            
+        elif opcion == '4':
             return
         else:
             print("\nOpción no válida. Intente de nuevo.")
@@ -402,8 +477,18 @@ class DataPipelineLoader:
                     print("\n[!] Debe transformar los datos categóricos primero (Opción 2.3).")
                 else:
                     self.normalizar_y_escalar()
-            elif opcion in ['2.5', '3', '4'] or (opcion == '2' and self.normalizacion_lista):
-                print(f"\n[!] Esa opción aún está pendiente de implementación o requiere pasos previos.")
+            elif opcion == '2.5' or (opcion == '2' and self.normalizacion_lista and not self.atipicos_listos):
+                if not self.normalizacion_lista:
+                    print("\n[!] Debe normalizar y escalar los datos primero (Opción 2.4).")
+                else:
+                    self.detectar_y_manejar_atipicos()
+            elif opcion == '3' or (opcion == '2' and self.atipicos_listos):
+                if not self.atipicos_listos:
+                    print("\n[!] Debe completar todo el preprocesado antes de visualizar los datos.")
+                else:
+                    print("\n[!] Módulo de Visualización de Datos en construcción...")
+            elif opcion == '4':
+                print(f"\n[!] La opción 4 aún está pendiente de implementación.")
             elif opcion == '5':
                 break
             else:
@@ -412,3 +497,4 @@ class DataPipelineLoader:
 if __name__ == "__main__":
     app = DataPipelineLoader()
     app.ejecutar()
+
