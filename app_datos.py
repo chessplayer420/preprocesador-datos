@@ -13,6 +13,7 @@ class DataPipelineLoader:
         self.seleccion_columnas_lista = False
         self.valores_faltantes_listos = False
         self.transformacion_categorica_lista = False
+        self.normalizacion_lista = False
 
     def mostrar_menu_principal(self):
         print("\n==============================")
@@ -38,16 +39,23 @@ class DataPipelineLoader:
                 print("    [-] 2.2 Manejo de datos faltantes (pendiente)")
                 print("    [X] 2.3 Transformación de datos categóricos (requiere manejo de valores faltantes)")
                 print("    [X] 2.4 Normalización y escalado (requiere transformación categórica)")
+                print("    [X] 2.5 Detección y manejo de valores atípicos (requiere normalización)")
             elif not self.transformacion_categorica_lista:
                 print("    [✓] 2.2 Manejo de datos faltantes (completado)")
                 print("    [-] 2.3 Transformación de datos categóricos (pendiente)")
                 print("    [X] 2.4 Normalización y escalado (requiere transformación categórica)")
-            else:
+                print("    [X] 2.5 Detección y manejo de valores atípicos (requiere normalización)")
+            elif not self.normalizacion_lista:
                 print("    [✓] 2.2 Manejo de datos faltantes (completado)")
                 print("    [✓] 2.3 Transformación de datos categóricos (completado)")
                 print("    [-] 2.4 Normalización y escalado (pendiente)")
+                print("    [X] 2.5 Detección y manejo de valores atípicos (requiere normalización)")
+            else:
+                print("    [✓] 2.2 Manejo de datos faltantes (completado)")
+                print("    [✓] 2.3 Transformación de datos categóricos (completado)")
+                print("    [✓] 2.4 Normalización y escalado (completado)")
+                print("    [-] 2.5 Detección y manejo de valores atípicos (pendiente)")
                 
-            print("    [X] 2.5 Detección y manejo de valores atípicos (requiere normalización)")
             print("[X] 3. Visualización de datos (requiere preprocesado completo)")
             print("[X] 4. Exportar datos (requiere preprocesado completo)")
             
@@ -139,6 +147,7 @@ class DataPipelineLoader:
         self.seleccion_columnas_lista = False
         self.valores_faltantes_listos = False
         self.transformacion_categorica_lista = False
+        self.normalizacion_lista = False
 
     def mostrar_info_basica(self, mostrar_mensaje_carga=True):
         if mostrar_mensaje_carga:
@@ -184,6 +193,7 @@ class DataPipelineLoader:
             self.seleccion_columnas_lista = True
             self.valores_faltantes_listos = False
             self.transformacion_categorica_lista = False
+            self.normalizacion_lista = False
 
             print(f"Selección guardada: Features = {self.features}, Target = '{self.target}'")
 
@@ -266,17 +276,14 @@ class DataPipelineLoader:
         print("Transformación de Datos Categóricos")
         print("==============================")
         
-        # Criterio: Solo detectar columnas categóricas dentro de las variables de entrada (features)
         columnas_categoricas = self.df[self.features].select_dtypes(include=['object', 'category']).columns.tolist()
         
-        # Caso 2: No hay columnas categóricas
         if not columnas_categoricas:
             print("No se han detectado columnas categóricas en las variables de entrada seleccionadas.")
             print("No es necesario aplicar ninguna transformación.")
             self.transformacion_categorica_lista = True
             return
             
-        # Caso 1: Hay columnas categóricas
         print("Se han detectado columnas categóricas en las variables de entrada seleccionadas:")
         for col in columnas_categoricas:
             print(f"  - {col}")
@@ -289,13 +296,9 @@ class DataPipelineLoader:
         opcion = input("Seleccione una opción: ")
         
         if opcion == '1':
-            # Guardamos las columnas antes de la transformación para saber cuáles se generan nuevas
             columnas_originales = self.df.columns.tolist()
-            
-            # Aplicamos One-Hot Encoding
             self.df = pd.get_dummies(self.df, columns=columnas_categoricas, dtype=int)
             
-            # Actualizamos self.features quitando las categóricas antiguas y metiendo las nuevas binarias
             self.features = [f for f in self.features if f not in columnas_categoricas]
             nuevas_columnas = [c for c in self.df.columns if c not in columnas_originales]
             self.features.extend(nuevas_columnas)
@@ -304,12 +307,69 @@ class DataPipelineLoader:
             self.transformacion_categorica_lista = True
             
         elif opcion == '2':
-            # Aplicamos Label Encoding utilizando pandas nativo
             for col in columnas_categoricas:
                 self.df[col] = self.df[col].astype('category').cat.codes
                 
             print("\nTransformación completada con Label Encoding.")
             self.transformacion_categorica_lista = True
+            
+        elif opcion == '3':
+            return
+        else:
+            print("\nOpción no válida. Intente de nuevo.")
+
+    def normalizar_y_escalar(self):
+        print("\n==============================")
+        print("Normalización y Escalado")
+        print("==============================")
+        
+        # Detectamos únicamente las numéricas dentro de las features actuales
+        columnas_numericas = self.df[self.features].select_dtypes(include=['number']).columns.tolist()
+        
+        # Caso 2: No hay numéricas
+        if not columnas_numericas:
+            print("No se han detectado columnas numéricas en las variables de entrada seleccionadas.")
+            print("No es necesario aplicar ninguna normalización.")
+            self.normalizacion_lista = True
+            return
+            
+        # Caso 1: Sí hay numéricas
+        print("Se han detectado columnas numéricas en las variables de entrada seleccionadas:")
+        for col in columnas_numericas:
+            print(f"  - {col}")
+            
+        print("\nSeleccione una estrategia de normalización:")
+        print("  [1] Min-Max Scaling (escala valores entre 0 y 1)")
+        print("  [2] Z-score Normalization (media 0, desviación estándar 1)")
+        print("  [3] Volver al menú principal")
+        
+        opcion = input("Seleccione una opción: ")
+        
+        if opcion == '1':
+            for col in columnas_numericas:
+                col_min = self.df[col].min()
+                col_max = self.df[col].max()
+                # Evitamos división por cero si todos los valores de la columna son iguales
+                if col_max != col_min:
+                    self.df[col] = (self.df[col] - col_min) / (col_max - col_min)
+                else:
+                    self.df[col] = 0.0
+                    
+            print("\nNormalización completada con Min-Max Scaling.")
+            self.normalizacion_lista = True
+            
+        elif opcion == '2':
+            for col in columnas_numericas:
+                col_mean = self.df[col].mean()
+                col_std = self.df[col].std()
+                # Evitamos división por cero si la desviación es 0
+                if col_std != 0:
+                    self.df[col] = (self.df[col] - col_mean) / col_std
+                else:
+                    self.df[col] = 0.0
+                    
+            print("\nNormalización completada con Z-score Normalization.")
+            self.normalizacion_lista = True
             
         elif opcion == '3':
             return
@@ -337,7 +397,12 @@ class DataPipelineLoader:
                     print("\n[!] Debe gestionar los valores faltantes primero (Opción 2.2).")
                 else:
                     self.transformar_datos_categoricos()
-            elif opcion in ['2.4', '2.5', '3', '4'] or (opcion == '2' and self.transformacion_categorica_lista):
+            elif opcion == '2.4' or (opcion == '2' and self.transformacion_categorica_lista and not self.normalizacion_lista):
+                if not self.transformacion_categorica_lista:
+                    print("\n[!] Debe transformar los datos categóricos primero (Opción 2.3).")
+                else:
+                    self.normalizar_y_escalar()
+            elif opcion in ['2.5', '3', '4'] or (opcion == '2' and self.normalizacion_lista):
                 print(f"\n[!] Esa opción aún está pendiente de implementación o requiere pasos previos.")
             elif opcion == '5':
                 break
