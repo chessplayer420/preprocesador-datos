@@ -1,10 +1,13 @@
 import pandas as pd
 import sqlite3
 import os
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 class DataPipelineLoader:
     def __init__(self):
         self.df = None
+        self.df_original = None # Guarda la copia antes de las transformaciones
         self.nombre_archivo = None
         
         # Variables de estado del pipeline
@@ -15,17 +18,21 @@ class DataPipelineLoader:
         self.transformacion_categorica_lista = False
         self.normalizacion_lista = False
         self.atipicos_listos = False
+        self.visualizacion_lista = False
+
+    def check_preprocesado_completado(self):
+        return (self.seleccion_columnas_lista and 
+                self.valores_faltantes_listos and 
+                self.transformacion_categorica_lista and 
+                self.normalizacion_lista and 
+                self.atipicos_listos)
 
     def mostrar_menu_principal(self):
         print("\n==============================")
         print("Menú Principal")
         print("==============================")
         
-        preprocesado_completado = (self.seleccion_columnas_lista and 
-                                   self.valores_faltantes_listos and 
-                                   self.transformacion_categorica_lista and 
-                                   self.normalizacion_lista and 
-                                   self.atipicos_listos)
+        preprocesado_completado = self.check_preprocesado_completado()
         
         if self.nombre_archivo is None:
             print("[-] 1. Cargar datos (ningún archivo cargado)")
@@ -74,11 +81,15 @@ class DataPipelineLoader:
                 print("    [✓] 2.5 Detección y manejo de valores atípicos (completado)")
                 
             if preprocesado_completado:
-                print("[-] 3. Visualización de datos (pendiente)")
+                if not self.visualizacion_lista:
+                    print("[-] 3. Visualización de datos (pendiente)")
+                    print("[X] 4. Exportar datos (requiere visualización de datos)")
+                else:
+                    print("[✓] 3. Visualización de datos (completado)")
+                    print("[-] 4. Exportar datos (pendiente)")
             else:
                 print("[X] 3. Visualización de datos (requiere preprocesado completo)")
-                
-            print("[X] 4. Exportar datos (requiere preprocesado completo)")
+                print("[X] 4. Exportar datos (requiere preprocesado completo)")
             
         print("[✓] 5. Salir")
         
@@ -137,39 +148,34 @@ class DataPipelineLoader:
             conexion = sqlite3.connect(ruta)
             query_tablas = "SELECT name FROM sqlite_master WHERE type='table';"
             tablas = pd.read_sql(query_tablas, conexion)['name'].tolist()
-            
             if not tablas:
                 print("La base de datos está vacía.")
                 conexion.close()
                 return
-
             print("Tablas disponibles en la base de datos:")
             for i, tabla in enumerate(tablas):
                 print(f"  [{i+1}] {tabla}")
-                
             opcion_tabla = int(input("Seleccione una tabla: ")) - 1
             tabla_seleccionada = tablas[opcion_tabla]
-            
             self.df = pd.read_sql(f"SELECT * FROM {tabla_seleccionada}", conexion)
             self.nombre_archivo = f"{os.path.basename(ruta)} ({tabla_seleccionada})"
             self.resetear_preprocesado()
             conexion.close()
-            
             print(f'Datos de la tabla "{tabla_seleccionada}" cargados correctamente.')
             self.mostrar_info_basica(mostrar_mensaje_carga=False)
-            
         except Exception as e:
             print(f"Error al cargar la base de datos SQLite: {e}")
 
     def resetear_preprocesado(self):
-        """Reinicia todo el estado del pipeline."""
         self.features = []
         self.target = None
+        self.df_original = None
         self.seleccion_columnas_lista = False
         self.valores_faltantes_listos = False
         self.transformacion_categorica_lista = False
         self.normalizacion_lista = False
         self.atipicos_listos = False
+        self.visualizacion_lista = False
 
     def mostrar_info_basica(self, mostrar_mensaje_carga=True):
         if mostrar_mensaje_carga:
@@ -211,12 +217,15 @@ class DataPipelineLoader:
             self.features = [columnas[i] for i in feat_indices]
             self.target = columnas[target_index]
             
-            # Actualizamos estados
+            # Guardamos una copia pura del dataset en este punto exacto para las visualizaciones
+            self.df_original = self.df.copy()
+            
             self.seleccion_columnas_lista = True
             self.valores_faltantes_listos = False
             self.transformacion_categorica_lista = False
             self.normalizacion_lista = False
             self.atipicos_listos = False
+            self.visualizacion_lista = False
 
             print(f"Selección guardada: Features = {self.features}, Target = '{self.target}'")
 
@@ -227,7 +236,6 @@ class DataPipelineLoader:
         print("\n==============================")
         print("Manejo de Valores Faltantes")
         print("==============================")
-        
         columnas_seleccionadas = self.features + [self.target]
         faltantes_por_columna = self.df[columnas_seleccionadas].isnull().sum()
         columnas_con_nulos = faltantes_por_columna[faltantes_por_columna > 0]
@@ -249,7 +257,6 @@ class DataPipelineLoader:
         print("  [4] Rellenar con la moda de la columna")
         print("  [5] Rellenar con un valor constante")
         print("  [6] Volver al menú principal")
-        
         opcion = input("Seleccione una opción: ")
         
         if opcion == '1':
@@ -292,7 +299,6 @@ class DataPipelineLoader:
         print("\n==============================")
         print("Transformación de Datos Categóricos")
         print("==============================")
-        
         columnas_categoricas = self.df[self.features].select_dtypes(include=['object', 'category']).columns.tolist()
         
         if not columnas_categoricas:
@@ -309,7 +315,6 @@ class DataPipelineLoader:
         print("  [1] One-Hot Encoding (genera nuevas columnas binarias)")
         print("  [2] Label Encoding (convierte categorías a números enteros)")
         print("  [3] Volver al menú principal")
-        
         opcion = input("Seleccione una opción: ")
         
         if opcion == '1':
@@ -334,7 +339,6 @@ class DataPipelineLoader:
         print("\n==============================")
         print("Normalización y Escalado")
         print("==============================")
-        
         columnas_numericas = self.df[self.features].select_dtypes(include=['number']).columns.tolist()
         
         if not columnas_numericas:
@@ -351,7 +355,6 @@ class DataPipelineLoader:
         print("  [1] Min-Max Scaling (escala valores entre 0 y 1)")
         print("  [2] Z-score Normalization (media 0, desviación estándar 1)")
         print("  [3] Volver al menú principal")
-        
         opcion = input("Seleccione una opción: ")
         
         if opcion == '1':
@@ -383,36 +386,28 @@ class DataPipelineLoader:
         print("\n==============================")
         print("Detección y Manejo de Valores Atípicos")
         print("==============================")
-        
         columnas_numericas = self.df[self.features].select_dtypes(include=['number']).columns.tolist()
-        
-        # Diccionarios para almacenar la información de los outliers encontrados
         dict_atipicos = {}
         mascaras_atipicos = {}
         
-        # Algoritmo IQR
         for col in columnas_numericas:
             Q1 = self.df[col].quantile(0.25)
             Q3 = self.df[col].quantile(0.75)
             IQR = Q3 - Q1
             limite_inferior = Q1 - 1.5 * IQR
             limite_superior = Q3 + 1.5 * IQR
-            
             mascara = (self.df[col] < limite_inferior) | (self.df[col] > limite_superior)
             cantidad = mascara.sum()
-            
             if cantidad > 0:
                 dict_atipicos[col] = cantidad
                 mascaras_atipicos[col] = mascara
                 
-        # Caso 2: No se detectan valores atípicos
         if not dict_atipicos:
             print("No se han detectado valores atípicos en las columnas seleccionadas.")
             print("No es necesario aplicar ninguna estrategia.")
             self.atipicos_listos = True
             return
             
-        # Caso 1: Sí se detectan
         print("Se han detectado valores atípicos en las siguientes columnas numéricas seleccionadas:")
         for col, cantidad in dict_atipicos.items():
             print(f"  - {col}: {cantidad} valores atípicos detectados")
@@ -422,34 +417,119 @@ class DataPipelineLoader:
         print("  [2] Reemplazar valores atípicos con la mediana de la columna")
         print("  [3] Mantener valores atípicos sin cambios")
         print("  [4] Volver al menú principal")
-        
         opcion = input("Seleccione una opción: ")
         
         if opcion == '1':
-            # Creamos una máscara global combinando todas las máscaras individuales
             mascara_total = pd.Series(False, index=self.df.index)
             for mascara in mascaras_atipicos.values():
                 mascara_total = mascara_total | mascara
-                
             self.df = self.df[~mascara_total]
             print("\nFilas con valores atípicos eliminadas.")
             self.atipicos_listos = True
-            
         elif opcion == '2':
             for col, mascara in mascaras_atipicos.items():
                 mediana = self.df[col].median()
                 self.df.loc[mascara, col] = mediana
             print("\nValores atípicos reemplazados con la mediana de cada columna.")
             self.atipicos_listos = True
-            
         elif opcion == '3':
             print("\nSe han mantenido los valores atípicos sin cambios.")
             self.atipicos_listos = True
-            
         elif opcion == '4':
             return
         else:
             print("\nOpción no válida. Intente de nuevo.")
+
+    def visualizar_datos(self):
+        while True:
+            print("\n==============================")
+            print("Visualización de Datos")
+            print("==============================")
+            print("Seleccione qué tipo de visualización desea generar:")
+            print("  [1] Resumen estadístico de las variables seleccionadas")
+            print("  [2] Histogramas de variables numéricas")
+            print("  [3] Gráficos de dispersión antes y después de la normalización")
+            print("  [4] Heatmap de correlación de variables numéricas")
+            print("  [5] Volver al menú principal")
+            
+            opcion = input("Seleccione una opción: ")
+            
+            num_cols_post = self.df[self.features].select_dtypes(include=['number']).columns.tolist()
+            
+            if opcion == '1':
+                print("\nResumen estadístico de las variables seleccionadas:\n")
+                print(f"{'Variable':<15} | {'Media':<10} | {'Mediana':<10} | {'Desviación Est.':<15} | {'Mínimo':<10} | {'Máximo':<10}")
+                print("-" * 80)
+                
+                for col in num_cols_post:
+                    # Formateo condicional para imprimir redondos si se puede, y si no con 2 decimales
+                    media = round(self.df[col].mean(), 2) if pd.notnull(self.df[col].mean()) else "N/A"
+                    mediana = round(self.df[col].median(), 2) if pd.notnull(self.df[col].median()) else "N/A"
+                    std = round(self.df[col].std(), 2) if pd.notnull(self.df[col].std()) else "N/A"
+                    min_val = round(self.df[col].min(), 2) if pd.notnull(self.df[col].min()) else "N/A"
+                    max_val = round(self.df[col].max(), 2) if pd.notnull(self.df[col].max()) else "N/A"
+                    
+                    print(f"{col:<15} | {str(media):<10} | {str(mediana):<10} | {str(std):<15} | {str(min_val):<10} | {str(max_val):<10}")
+                
+                self.visualizacion_lista = True
+                
+            elif opcion == '2':
+                if num_cols_post:
+                    self.df[num_cols_post].hist(bins=20, figsize=(12, 8), edgecolor='black')
+                    plt.suptitle("Histogramas de variables numéricas (Post-procesado)", fontsize=16)
+                    plt.tight_layout()
+                    plt.show()
+                    self.visualizacion_lista = True
+                else:
+                    print("\n[!] No hay variables numéricas para mostrar histogramas.")
+                    
+            elif opcion == '3':
+                # Buscamos columnas que existan tanto en el original como en el postprocesado
+                cols_originales = self.df_original.select_dtypes(include=['number']).columns.tolist()
+                cols_comunes = [c for c in num_cols_post if c in cols_originales]
+                
+                if len(cols_comunes) >= 2:
+                    col_x = cols_comunes[0]
+                    col_y = cols_comunes[1]
+                    
+                    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+                    
+                    # Gráfico original
+                    ax1.scatter(self.df_original[col_x], self.df_original[col_y], alpha=0.6, color='blue')
+                    ax1.set_title("Antes de la normalización")
+                    ax1.set_xlabel(col_x)
+                    ax1.set_ylabel(col_y)
+                    ax1.grid(True, linestyle='--', alpha=0.7)
+                    
+                    # Gráfico post-procesado
+                    ax2.scatter(self.df[col_x], self.df[col_y], alpha=0.6, color='orange')
+                    ax2.set_title("Después del preprocesado")
+                    ax2.set_xlabel(col_x)
+                    ax2.set_ylabel(col_y)
+                    ax2.grid(True, linestyle='--', alpha=0.7)
+                    
+                    plt.suptitle(f"Comparación de Dispersión: {col_x} vs {col_y}", fontsize=16)
+                    plt.tight_layout()
+                    plt.show()
+                    self.visualizacion_lista = True
+                else:
+                    print("\n[!] Se necesitan al menos 2 variables numéricas originales para comparar la dispersión.")
+                    
+            elif opcion == '4':
+                if len(num_cols_post) > 1:
+                    plt.figure(figsize=(10, 8))
+                    sns.heatmap(self.df[num_cols_post].corr(), annot=True, cmap='coolwarm', fmt=".2f", linewidths=0.5)
+                    plt.title("Heatmap de correlación de variables numéricas", fontsize=16)
+                    plt.tight_layout()
+                    plt.show()
+                    self.visualizacion_lista = True
+                else:
+                    print("\n[!] Se necesitan al menos 2 variables numéricas para generar un heatmap.")
+                    
+            elif opcion == '5':
+                break
+            else:
+                print("\nOpción no válida. Intente de nuevo.")
 
     def ejecutar(self):
         while True:
@@ -482,13 +562,21 @@ class DataPipelineLoader:
                     print("\n[!] Debe normalizar y escalar los datos primero (Opción 2.4).")
                 else:
                     self.detectar_y_manejar_atipicos()
-            elif opcion == '3' or (opcion == '2' and self.atipicos_listos):
-                if not self.atipicos_listos:
-                    print("\n[!] Debe completar todo el preprocesado antes de visualizar los datos.")
+            elif opcion == '3':
+                # Control estricto de error caso 2: Bloquear si no se ha completado el preprocesado
+                if not self.check_preprocesado_completado():
+                    print("\n==============================")
+                    print("Visualización de Datos")
+                    print("==============================")
+                    print("No es posible visualizar los datos hasta que se complete el preprocesado.")
+                    print("Por favor, finalice el manejo de valores atípicos antes de continuar.")
                 else:
-                    print("\n[!] Módulo de Visualización de Datos en construcción...")
+                    self.visualizar_datos()
             elif opcion == '4':
-                print(f"\n[!] La opción 4 aún está pendiente de implementación.")
+                if not self.visualizacion_lista:
+                    print("\n[!] Debe visualizar los datos primero antes de exportarlos.")
+                else:
+                    print(f"\n[!] Módulo de Exportación de Datos en construcción...")
             elif opcion == '5':
                 break
             else:
@@ -497,4 +585,5 @@ class DataPipelineLoader:
 if __name__ == "__main__":
     app = DataPipelineLoader()
     app.ejecutar()
+
 
