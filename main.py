@@ -1,20 +1,25 @@
 import os
 import pandas as pd
 
-# Importamos las clases desde nuestros módulos locales
 from data_io import DataIO
 from transformer import DataTransformer
 from visualizer import DataVisualizer
 
 class PipelineConsoleUI:
-    """Gestiona el flujo del usuario, el menú y mantiene el estado general (Contexto)."""
+    """
+    Controlador central (Orquestador).
+    Gestiona el ciclo de vida de la aplicación: estados de los menús,
+    interacción con el usuario en la consola e invocación de los módulos externos.
+    """
     def __init__(self):
+        # Contexto: Variables que almacenan los datos vivos
         self.df = None
         self.df_original = None
         self.nombre_archivo = None
         self.features = []
         self.target = None
         
+        # Máquina de estados: Define qué menús están bloqueados o desbloqueados
         self.estados = {
             'seleccion_columnas': False,
             'valores_faltantes': False,
@@ -26,20 +31,27 @@ class PipelineConsoleUI:
         }
 
     def is_preprocesado_ok(self):
+        """Valida si todas las fases del preprocesamiento (etapas 2.1 a 2.5) han concluido."""
         return all([self.estados['seleccion_columnas'], self.estados['valores_faltantes'], 
                     self.estados['trans_categorica'], self.estados['normalizacion'], self.estados['atipicos']])
 
     def reset_estados(self):
+        """Reinicia el contexto a cero cuando se carga un dataset nuevo."""
         self.features, self.target, self.df_original = [], None, None
         for key in self.estados:
             self.estados[key] = False
 
     def mostrar_info_basica(self):
+        """Imprime un pequeño resumen en consola de la estructura del DataFrame cargado."""
         print("Datos cargados correctamente.")
         print(f"Número de filas: {self.df.shape[0]}\nNúmero de columnas: {self.df.shape[1]}")
         print("Primeras 5 filas:\n", self.df.head(5).to_string())
 
     def menu_principal(self):
+        """
+        Renderiza el menú principal dinámico basado en las variables del diccionario 'self.estados'.
+        Implementa un bucle infinito hasta que el usuario elige 'Salir'.
+        """
         while True:
             print("\n==============================\nMenú Principal\n==============================")
             p_ok = self.is_preprocesado_ok()
@@ -78,6 +90,7 @@ class PipelineConsoleUI:
             self.enrutar_opcion(opcion)
 
     def enrutar_opcion(self, opcion):
+        """Filtra y redirige la elección del usuario hacia el submenú o método correcto."""
         if opcion == '1': self.ui_cargar_datos()
         elif opcion == '2.1' or (opcion == '2' and not self.estados['seleccion_columnas']):
             self.ui_seleccionar_columnas() if self.nombre_archivo else print("\n[!] Cargue un archivo primero.")
@@ -99,6 +112,10 @@ class PipelineConsoleUI:
             print("\n¡Gracias por utilizar el Pipeline de Datos! Hasta la próxima.\n")
             exit()
         else: print("Opción no válida.")
+
+    # -------------------------------------------------------------------------
+    # MÉTODOS DE VISTAS (User Interfaces) - Piden Input y llaman a los Módulos
+    # -------------------------------------------------------------------------
 
     def ui_cargar_datos(self):
         print("\n==============================\nCarga de Datos\n==============================\nSeleccione el tipo de archivo a cargar:\n  [1] CSV\n  [2] Excel\n  [3] SQLite\n  [4] Volver")
@@ -139,6 +156,8 @@ class PipelineConsoleUI:
 
             self.features = [columnas[i] for i in f_idx]
             self.target = columnas[t_idx]
+            
+            # Instantánea de los datos crudos para comparar luego en visualización
             self.df_original = self.df.copy()
             self.reset_estados()
             self.estados['seleccion_columnas'] = True
