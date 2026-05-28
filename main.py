@@ -13,14 +13,12 @@ class PipelineConsoleUI:
     interacción con el usuario en la consola e invocación de los módulos externos.
     """
     def __init__(self):
-        # Contexto: Variables que almacenan los datos vivos
         self.df = None
         self.df_original = None
         self.nombre_archivo = None
         self.features = []
         self.target = None
         
-        # Máquina de estados: Define qué menús están bloqueados o desbloqueados
         self.estados = {
             'seleccion_columnas': False,
             'valores_faltantes': False,
@@ -32,27 +30,20 @@ class PipelineConsoleUI:
         }
 
     def is_preprocesado_ok(self):
-        """Valida si todas las fases del preprocesamiento (etapas 2.1 a 2.5) han concluido."""
         return all([self.estados['seleccion_columnas'], self.estados['valores_faltantes'], 
                     self.estados['trans_categorica'], self.estados['normalizacion'], self.estados['atipicos']])
 
     def reset_estados(self):
-        """Reinicia el contexto a cero cuando se carga un dataset nuevo."""
         self.features, self.target, self.df_original = [], None, None
         for key in self.estados:
             self.estados[key] = False
 
     def mostrar_info_basica(self):
-        """Imprime un pequeño resumen en consola de la estructura del DataFrame cargado."""
         print("Datos cargados correctamente.")
         print(f"Número de filas: {self.df.shape[0]}\nNúmero de columnas: {self.df.shape[1]}")
         print("Primeras 5 filas:\n", self.df.head(5).to_string())
 
     def menu_principal(self):
-        """
-        Renderiza el menú principal dinámico basado en las variables del diccionario 'self.estados'.
-        Implementa un bucle infinito hasta que el usuario elige 'Salir'.
-        """
         while True:
             print("\n==============================\nMenú Principal\n==============================")
             p_ok = self.is_preprocesado_ok()
@@ -91,7 +82,6 @@ class PipelineConsoleUI:
             self.enrutar_opcion(opcion)
 
     def enrutar_opcion(self, opcion):
-        """Filtra y redirige la elección del usuario hacia el submenú o método correcto."""
         if opcion == '1': self.ui_cargar_datos()
         elif opcion == '2.1' or (opcion == '2' and not self.estados['seleccion_columnas']):
             self.ui_seleccionar_columnas() if self.nombre_archivo else print("\n[!] Cargue un archivo primero.")
@@ -110,12 +100,11 @@ class PipelineConsoleUI:
         elif opcion == '4':
             self.ui_exportar()
         elif opcion == '5':
-            print("\n¡Gracias por utilizar el Pipeline de Datos! Hasta la próxima.\n")
-            exit()
+            self.ui_salir()
         else: print("Opción no válida.")
 
     # -------------------------------------------------------------------------
-    # MÉTODOS DE VISTAS (User Interfaces) - Piden Input y llaman a los Módulos
+    # MÉTODOS DE VISTAS (User Interfaces)
     # -------------------------------------------------------------------------
 
     def ui_cargar_datos(self):
@@ -168,7 +157,6 @@ class PipelineConsoleUI:
             self.features = [columnas[i] for i in f_idx]
             self.target = columnas[t_idx]
             
-            # Instantánea de los datos crudos para comparar luego en visualización
             self.df_original = self.df.copy()
             self.reset_estados()
             self.estados['seleccion_columnas'] = True
@@ -303,6 +291,23 @@ class PipelineConsoleUI:
                 print(f"\n[ERROR] Permiso denegado. Asegúrese de que el archivo '{nombre}' no esté abierto en otro programa (como Excel).")
             except Exception as e:
                 print(f"\n[ERROR] No se pudo exportar el archivo: {e}")
+
+    def ui_salir(self):
+        print("\n==============================")
+        print("Salir de la Aplicación")
+        print("==============================")
+        print("¿Está seguro de que desea salir?")
+        print("  [1] Sí")
+        print("  [2] No")
+        opcion = input("Seleccione una opción: ")
+        
+        if opcion == '1':
+            print("\nCerrando la aplicación...\n")
+            exit()
+        elif opcion == '2':
+            print("\nRegresando al menú principal...\n")
+        else:
+            print("\nOpción no válida. Regresando al menú principal...\n")
 
 if __name__ == "__main__":
     app = PipelineConsoleUI()
