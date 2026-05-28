@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import pandas as pd
 
 from data_io import DataIO
@@ -138,9 +139,18 @@ class PipelineConsoleUI:
                 self.df = DataIO.cargar_sqlite(ruta, tablas[t_idx])
                 self.nombre_archivo = f"{os.path.basename(ruta)} ({tablas[t_idx]})"
             else: return
+            
             self.reset_estados()
             self.mostrar_info_basica()
-        except Exception as e: print(f"Error al cargar: {e}")
+            
+        except FileNotFoundError:
+            print("\n[ERROR] Archivo no encontrado. Verifique la ruta y el nombre del archivo.")
+        except ValueError as ve:
+            print(f"\n[ERROR] Problema con el formato de los datos: {ve}")
+        except sqlite3.Error as sqle:
+            print(f"\n[ERROR] Problema con la base de datos SQLite: {sqle}")
+        except Exception as e: 
+            print(f"\n[ERROR INESPERADO] Hubo un problema al cargar: {e}")
 
     def ui_seleccionar_columnas(self):
         print("\n==============================\nSelección de Columnas\n==============================\nColumnas disponibles:")
@@ -152,7 +162,8 @@ class PipelineConsoleUI:
             
             f_idx = [int(x.strip()) - 1 for x in feat_input.split(',')]
             t_idx = int(target_input.strip()) - 1
-            if t_idx in f_idx: raise ValueError()
+            if t_idx in f_idx: 
+                raise ValueError("El target no puede estar incluido dentro de las features.")
 
             self.features = [columnas[i] for i in f_idx]
             self.target = columnas[t_idx]
@@ -162,7 +173,9 @@ class PipelineConsoleUI:
             self.reset_estados()
             self.estados['seleccion_columnas'] = True
             print(f"\nSelección guardada: Features = {self.features}, Target = '{self.target}'")
-        except: print("⚠ Error en la selección.")
+            
+        except (ValueError, IndexError) as e:
+            print(f"\n⚠ Error en la selección: Asegúrese de ingresar solo números válidos del menú. ({e})")
 
     def ui_faltantes(self):
         print("\n==============================\nManejo de Valores Faltantes\n==============================")
@@ -178,8 +191,15 @@ class PipelineConsoleUI:
         print("\n  [1] Eliminar filas\n  [2] Rellenar media\n  [3] Rellenar mediana\n  [4] Rellenar moda\n  [5] Valor constante\n  [6] Volver")
         op = input("Opción: ")
         if op in ['1','2','3','4','5']:
-            val = input("Valor constante (si aplica): ") if op == '5' else None
-            if val: val = float(val) if '.' in val else int(val)
+            val = None
+            if op == '5':
+                try:
+                    val_str = input("Valor constante numérico: ")
+                    val = float(val_str) if '.' in val_str else int(val_str)
+                except ValueError:
+                    print("\n[ERROR] Debe ingresar un valor estrictamente numérico. Operación cancelada.")
+                    return
+                
             self.df = DataTransformer.manejar_faltantes(self.df, con_nulos, op, val)
             print("Valores gestionados correctamente.")
             self.estados['valores_faltantes'] = True
@@ -270,10 +290,19 @@ class PipelineConsoleUI:
         op = input("Opción: ")
         if op in ['1', '2']:
             nombre = input("Nombre de archivo (sin extensión): ").strip()
-            if op == '1': DataIO.exportar_csv(self.df, f"{nombre}.csv")
-            if op == '2': DataIO.exportar_excel(self.df, f"{nombre}.xlsx")
-            print("Datos exportados correctamente.")
-            self.estados['exportacion'] = True
+            if not nombre:
+                print("\n[ERROR] El nombre del archivo no puede estar vacío.")
+                return
+                
+            try:
+                if op == '1': DataIO.exportar_csv(self.df, f"{nombre}.csv")
+                if op == '2': DataIO.exportar_excel(self.df, f"{nombre}.xlsx")
+                print("Datos exportados correctamente.")
+                self.estados['exportacion'] = True
+            except PermissionError:
+                print(f"\n[ERROR] Permiso denegado. Asegúrese de que el archivo '{nombre}' no esté abierto en otro programa (como Excel).")
+            except Exception as e:
+                print(f"\n[ERROR] No se pudo exportar el archivo: {e}")
 
 if __name__ == "__main__":
     app = PipelineConsoleUI()
