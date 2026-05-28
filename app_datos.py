@@ -7,7 +7,7 @@ import seaborn as sns
 class DataPipelineLoader:
     def __init__(self):
         self.df = None
-        self.df_original = None # Guarda la copia antes de las transformaciones
+        self.df_original = None 
         self.nombre_archivo = None
         
         # Variables de estado del pipeline
@@ -19,6 +19,7 @@ class DataPipelineLoader:
         self.normalizacion_lista = False
         self.atipicos_listos = False
         self.visualizacion_lista = False
+        self.exportacion_lista = False
 
     def check_preprocesado_completado(self):
         return (self.seleccion_columnas_lista and 
@@ -39,11 +40,13 @@ class DataPipelineLoader:
             print("[X] 2. Preprocesado de datos (requiere carga de datos)")
             print("[X] 3. Visualización de datos (requiere carga y preprocesado)")
             print("[X] 4. Exportar datos (requiere carga y preprocesado)")
+            print("[✓] 5. Salir")
         elif not self.seleccion_columnas_lista:
             print(f"[✓] 1. Cargar datos (archivo: {self.nombre_archivo})")
             print("[-] 2. Preprocesado de datos (selección de columnas requerida)")
             print("[X] 3. Visualización de datos (requiere preprocesado)")
             print("[X] 4. Exportar datos (requiere preprocesado)")
+            print("[✓] 5. Salir")
         else:
             print(f"[✓] 1. Cargar datos (archivo: {self.nombre_archivo})")
             
@@ -84,15 +87,20 @@ class DataPipelineLoader:
                 if not self.visualizacion_lista:
                     print("[-] 3. Visualización de datos (pendiente)")
                     print("[X] 4. Exportar datos (requiere visualización de datos)")
+                    print("[✓] 5. Salir")
                 else:
                     print("[✓] 3. Visualización de datos (completado)")
-                    print("[-] 4. Exportar datos (pendiente)")
+                    if not self.exportacion_lista:
+                        print("[-] 4. Exportar datos (pendiente)")
+                        print("[✓] 5. Salir")
+                    else:
+                        print("[✓] 4. Exportar datos (completado)")
+                        print("[-] 5. Salir")
             else:
                 print("[X] 3. Visualización de datos (requiere preprocesado completo)")
                 print("[X] 4. Exportar datos (requiere preprocesado completo)")
+                print("[✓] 5. Salir")
             
-        print("[✓] 5. Salir")
-        
         return input("Seleccione una opción: ")
 
     def menu_carga_datos(self):
@@ -105,7 +113,6 @@ class DataPipelineLoader:
             print("  [2] Excel")
             print("  [3] SQLite")
             print("  [4] Volver al menú principal")
-            
             opcion = input("Seleccione una opción: ")
             
             if opcion == '1':
@@ -176,6 +183,7 @@ class DataPipelineLoader:
         self.normalizacion_lista = False
         self.atipicos_listos = False
         self.visualizacion_lista = False
+        self.exportacion_lista = False
 
     def mostrar_info_basica(self, mostrar_mensaje_carga=True):
         if mostrar_mensaje_carga:
@@ -190,7 +198,6 @@ class DataPipelineLoader:
         print("Selección de Columnas")
         print("==============================")
         print("Columnas disponibles en los datos:")
-        
         columnas = self.df.columns.tolist()
         for i, col in enumerate(columnas):
             print(f"  [{i+1}] {col}")
@@ -216,8 +223,6 @@ class DataPipelineLoader:
 
             self.features = [columnas[i] for i in feat_indices]
             self.target = columnas[target_index]
-            
-            # Guardamos una copia pura del dataset en este punto exacto para las visualizaciones
             self.df_original = self.df.copy()
             
             self.seleccion_columnas_lista = True
@@ -226,6 +231,7 @@ class DataPipelineLoader:
             self.normalizacion_lista = False
             self.atipicos_listos = False
             self.visualizacion_lista = False
+            self.exportacion_lista = False
 
             print(f"Selección guardada: Features = {self.features}, Target = '{self.target}'")
 
@@ -451,7 +457,6 @@ class DataPipelineLoader:
             print("  [3] Gráficos de dispersión antes y después de la normalización")
             print("  [4] Heatmap de correlación de variables numéricas")
             print("  [5] Volver al menú principal")
-            
             opcion = input("Seleccione una opción: ")
             
             num_cols_post = self.df[self.features].select_dtypes(include=['number']).columns.tolist()
@@ -460,19 +465,14 @@ class DataPipelineLoader:
                 print("\nResumen estadístico de las variables seleccionadas:\n")
                 print(f"{'Variable':<15} | {'Media':<10} | {'Mediana':<10} | {'Desviación Est.':<15} | {'Mínimo':<10} | {'Máximo':<10}")
                 print("-" * 80)
-                
                 for col in num_cols_post:
-                    # Formateo condicional para imprimir redondos si se puede, y si no con 2 decimales
                     media = round(self.df[col].mean(), 2) if pd.notnull(self.df[col].mean()) else "N/A"
                     mediana = round(self.df[col].median(), 2) if pd.notnull(self.df[col].median()) else "N/A"
                     std = round(self.df[col].std(), 2) if pd.notnull(self.df[col].std()) else "N/A"
                     min_val = round(self.df[col].min(), 2) if pd.notnull(self.df[col].min()) else "N/A"
                     max_val = round(self.df[col].max(), 2) if pd.notnull(self.df[col].max()) else "N/A"
-                    
                     print(f"{col:<15} | {str(media):<10} | {str(mediana):<10} | {str(std):<15} | {str(min_val):<10} | {str(max_val):<10}")
-                
                 self.visualizacion_lista = True
-                
             elif opcion == '2':
                 if num_cols_post:
                     self.df[num_cols_post].hist(bins=20, figsize=(12, 8), edgecolor='black')
@@ -482,39 +482,29 @@ class DataPipelineLoader:
                     self.visualizacion_lista = True
                 else:
                     print("\n[!] No hay variables numéricas para mostrar histogramas.")
-                    
             elif opcion == '3':
-                # Buscamos columnas que existan tanto en el original como en el postprocesado
                 cols_originales = self.df_original.select_dtypes(include=['number']).columns.tolist()
                 cols_comunes = [c for c in num_cols_post if c in cols_originales]
-                
                 if len(cols_comunes) >= 2:
                     col_x = cols_comunes[0]
                     col_y = cols_comunes[1]
-                    
                     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
-                    
-                    # Gráfico original
                     ax1.scatter(self.df_original[col_x], self.df_original[col_y], alpha=0.6, color='blue')
                     ax1.set_title("Antes de la normalización")
                     ax1.set_xlabel(col_x)
                     ax1.set_ylabel(col_y)
                     ax1.grid(True, linestyle='--', alpha=0.7)
-                    
-                    # Gráfico post-procesado
                     ax2.scatter(self.df[col_x], self.df[col_y], alpha=0.6, color='orange')
                     ax2.set_title("Después del preprocesado")
                     ax2.set_xlabel(col_x)
                     ax2.set_ylabel(col_y)
                     ax2.grid(True, linestyle='--', alpha=0.7)
-                    
                     plt.suptitle(f"Comparación de Dispersión: {col_x} vs {col_y}", fontsize=16)
                     plt.tight_layout()
                     plt.show()
                     self.visualizacion_lista = True
                 else:
                     print("\n[!] Se necesitan al menos 2 variables numéricas originales para comparar la dispersión.")
-                    
             elif opcion == '4':
                 if len(num_cols_post) > 1:
                     plt.figure(figsize=(10, 8))
@@ -525,11 +515,48 @@ class DataPipelineLoader:
                     self.visualizacion_lista = True
                 else:
                     print("\n[!] Se necesitan al menos 2 variables numéricas para generar un heatmap.")
-                    
             elif opcion == '5':
                 break
             else:
                 print("\nOpción no válida. Intente de nuevo.")
+
+    def exportar_datos(self):
+        print("\n==============================")
+        print("Exportación de Datos")
+        print("==============================")
+        
+        # Validar prerrequisitos
+        if not (self.check_preprocesado_completado() and self.visualizacion_lista):
+            print("No es posible exportar los datos hasta que se complete el preprocesado y la visualización.")
+            print("Por favor, finalice todas las etapas antes de continuar.")
+            return
+
+        while True:
+            print("Seleccione el formato de exportación:")
+            print("  [1] CSV (.csv)")
+            print("  [2] Excel (.xlsx)")
+            print("  [3] Volver al menú principal")
+            
+            opcion = input("Seleccione una opción: ")
+            
+            if opcion == '1':
+                nombre = input("\nIngrese el nombre del archivo de salida (sin extensión): ").strip()
+                archivo = f"{nombre}.csv"
+                self.df.to_csv(archivo, index=False)
+                print(f"Datos exportados correctamente como \"{archivo}\".")
+                self.exportacion_lista = True
+                break
+            elif opcion == '2':
+                nombre = input("\nIngrese el nombre del archivo de salida (sin extensión): ").strip()
+                archivo = f"{nombre}.xlsx"
+                self.df.to_excel(archivo, index=False)
+                print(f"Datos exportados correctamente como \"{archivo}\".")
+                self.exportacion_lista = True
+                break
+            elif opcion == '3':
+                break
+            else:
+                print("\nOpción no válida. Intente de nuevo.\n")
 
     def ejecutar(self):
         while True:
@@ -563,7 +590,6 @@ class DataPipelineLoader:
                 else:
                     self.detectar_y_manejar_atipicos()
             elif opcion == '3':
-                # Control estricto de error caso 2: Bloquear si no se ha completado el preprocesado
                 if not self.check_preprocesado_completado():
                     print("\n==============================")
                     print("Visualización de Datos")
@@ -573,11 +599,10 @@ class DataPipelineLoader:
                 else:
                     self.visualizar_datos()
             elif opcion == '4':
-                if not self.visualizacion_lista:
-                    print("\n[!] Debe visualizar los datos primero antes de exportarlos.")
-                else:
-                    print(f"\n[!] Módulo de Exportación de Datos en construcción...")
+                # Toda la lógica y control de errores están dentro de exportar_datos()
+                self.exportar_datos()
             elif opcion == '5':
+                print("\n¡Gracias por utilizar el Pipeline de Datos! Hasta la próxima.\n")
                 break
             else:
                 print("Opción no válida. Intente de nuevo.")
@@ -585,5 +610,6 @@ class DataPipelineLoader:
 if __name__ == "__main__":
     app = DataPipelineLoader()
     app.ejecutar()
+
 
 
